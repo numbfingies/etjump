@@ -143,9 +143,15 @@ void PmoveUtils::PM_UpdateWishvel(vec3_t wishvel, usercmd_t cmd, vec3_t forward,
                                   const playerState_t &ps) {
   AngleVectors(ps.viewangles, forward, right, up);
 
-  // project moves down to flat plane
-  forward[2] = 0;
-  right[2] = 0;
+  if (pm && pm->pmext && !(pm->pmext->groundPlane &&
+      (pm->pmext->groundTrace.plane.normal[0] ||
+       pm->pmext->groundTrace.plane.normal[1]))) {
+    // project moves down to flat plane
+    forward[2] = 0;
+    right[2] = 0;
+  }
+  wishvel[2] = 0;
+
   VectorNormalize(forward);
   VectorNormalize(right);
 
@@ -153,4 +159,5 @@ void PmoveUtils::PM_UpdateWishvel(vec3_t wishvel, usercmd_t cmd, vec3_t forward,
     wishvel[i] = cmd.forwardmove * forward[i] + cmd.rightmove * right[i];
   }
 }
+
 } // namespace ETJump

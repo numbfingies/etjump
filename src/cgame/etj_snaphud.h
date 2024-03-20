@@ -83,6 +83,10 @@ private:
     int eSnap;
     bool alt;
     bool active;
+    float red;
+    float green;
+    float blue;
+    float alpha;
   };
 
   std::vector<DrawableSnap> drawableSnaps{};

@@ -23,6 +23,7 @@
  */
 
 #include "etj_accel_color.h"
+#include "etj_accelmeter_drawable.h"
 #include "etj_pmove_utils.h"
 #include "etj_cgaz.h"
 #include "../game/etj_numeric_utilities.h"
@@ -83,40 +84,37 @@ void AccelColor::calcAccelColor(pmove_t *pm, vec3_t &accel, vec4_t &outColor) {
     // get accels for opt angle
     float optAccelX = std::roundf(
         frameAccel *
-        static_cast<float>(std::cos(DEG2RAD(accelAngle + optAngle)) * scale));
+        static_cast<float>(std::cos(DEG2RAD(accelAngle + optAngle))));
     float optAccelY = std::roundf(
         frameAccel *
-        static_cast<float>(std::sin(DEG2RAD(accelAngle + optAngle)) * scale));
+        static_cast<float>(std::sin(DEG2RAD(accelAngle + optAngle))));
 
     // get accels for alt opt angle
     float altOptAccelX =
         std::round(frameAccel *
                    static_cast<float>(
-                       std::cos(DEG2RAD(accelAngleAlt + altOptAngle)) * scale));
+                       std::cos(DEG2RAD(accelAngleAlt + altOptAngle))));
     float altOptAccelY =
         std::round(frameAccel *
                    static_cast<float>(
-                       std::sin(DEG2RAD(accelAngleAlt + altOptAngle)) * scale));
+                       std::sin(DEG2RAD(accelAngleAlt + altOptAngle))));
 
-    vec3_t optAccel = {optAccelX, optAccelY, gravityAccel};
-    vec3_t altOptAccel = {altOptAccelX, altOptAccelY, gravityAccel};
-    vec3_t normal = {0, 0, 0};
+    if (pm->groundPlane && (pm->pmext->groundTrace.plane.normal[0] ||
+                            pm->pmext->groundTrace.plane.normal[1])) {
+      vec3_t optAccel = {optAccelX, optAccelY, gravityAccel};
+      vec3_t altOptAccel = {altOptAccelX, altOptAccelY, gravityAccel};
+      vec3_t normal = {0, 0, 0};
 
-    VectorCopy(pm->groundTrace.plane.normal, normal);
+      VectorCopy(pm->groundTrace.plane.normal, normal);
 
-    if (pm->groundPlane) {
       PM_ClipVelocity(optAccel, normal, optAccel, OVERCLIP);
       PM_ClipVelocity(altOptAccel, normal, altOptAccel, OVERCLIP);
-    }
 
-    if ((normal)[0] != 0.0f) {
       optAccelX = std::roundf(optAccel[0]);
       altOptAccelX = std::roundf(altOptAccel[0]);
-    }
-
-    if ((normal)[1] != 0.0f) {
-      optAccelX = std::roundf(optAccel[1]);
-      altOptAccelX = std::roundf(altOptAccel[1]);
+      
+      optAccelY = std::roundf(optAccel[1]);
+      altOptAccelY = std::roundf(altOptAccel[1]);
     }
 
     // find max accel possible between opt and altOpt angles

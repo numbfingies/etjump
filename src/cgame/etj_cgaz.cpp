@@ -98,10 +98,28 @@ void CGaz::UpdateDraw(float wishspeed, float accel) {
   }
 
   state.gSquared = GetSlickGravity();
+  //if (pm->pmext->groundPlane && (pm->pmext->groundTrace.plane.normal[0] ||
+  //                               pm->pmext->groundTrace.plane.normal[1])) {
+  //  const float gravityAccel =
+  //      std::round(static_cast<float>(ps->gravity) * pm->pmext->frametime);
+  //  vec3_t gravityVec{0.f, 0.f, -gravityAccel};
+  //  PM_ClipVelocity(gravityVec, pm->groundTrace.plane.normal, gravityVec,
+  //                  OVERCLIP);
+  //  const float clippedAccelXY = VectorLength2(gravityVec);
+  //  state.vSquared = VectorLengthSquared(pm->pmext->previous_velocity);
+  //  state.vfSquared = VectorLengthSquared(pm->pmext->velocity);
+  //  state.a = accel * state.wishspeed * pm->pmext->frametime + clippedAccelXY;
+  //} else {
+  //  state.vSquared = VectorLengthSquared2(pm->pmext->previous_velocity);
+  //  state.vfSquared = VectorLengthSquared2(pm->pmext->velocity);
+  //  state.a = accel * state.wishspeed * pm->pmext->frametime;
+  //}
+
   state.vSquared = VectorLengthSquared2(pm->pmext->previous_velocity);
   state.vfSquared = VectorLengthSquared2(pm->pmext->velocity);
-  state.wishspeed = wishspeed;
   state.a = accel * state.wishspeed * pm->pmext->frametime;
+
+  state.wishspeed = wishspeed;
   state.aSquared = powf(state.a, 2);
   // show true ground zones?
   if (!(etj_CGazTrueness.integer &
@@ -158,8 +176,8 @@ float CGaz::UpdateDrawSnap() {
 }
 
 float CGaz::UpdateDrawMin(state_t const *state) {
-  float const num_squared = state->wishspeed * state->wishspeed -
-                            state->vSquared + state->vfSquared +
+  float const num_squared = state->wishspeed * state->wishspeed +
+                            -state->vSquared + state->vfSquared +
                             state->gSquared;
   float const num = sqrtf(num_squared);
   return num >= state->vf ? 0 : acosf(num / state->vf);
@@ -399,12 +417,16 @@ float CGaz::getFrameAccel(const playerState_t &ps, pmove_t *pm) {
     return 0;
   }
 
-  return static_cast<float>(ps.speed) * pm->pmext->frametime;
+  vec3_t wishvel;
+  const float wishspeed = PmoveUtils::PM_GetWishspeed(
+      wishvel, pm->pmext->scale, cmd, pm->pmext->forward, pm->pmext->right,
+      pm->pmext->up, ps, pm);
+  return pm->pmext->accel * wishspeed * pm->pmext->frametime;
 }
 
 float CGaz::getOptAngle(const playerState_t &ps, pmove_t *pm, bool alternate) {
   // get player speed
-  const float speed = VectorLength2(ps.velocity);
+  float speed = VectorLength2(ps.velocity);
 
   // get sprint scale
   const float scale = PmoveUtils::PM_SprintScale(&ps);
@@ -429,12 +451,18 @@ float CGaz::getOptAngle(const playerState_t &ps, pmove_t *pm, bool alternate) {
   // determine whether strafing "forwards"
   const bool forwards = strafingForwards(ps, pm);
 
+  // get wishspeed
+  vec3_t wishvel;
+  const float wishspeed = PmoveUtils::PM_GetWishspeed(
+      wishvel, pm->pmext->scale, cmd, pm->pmext->forward, pm->pmext->right,
+      pm->pmext->up, ps, pm);
+
   // get variables associated with optimal angle
   const float velAngle = RAD2DEG(std::atan2(ps.velocity[1], ps.velocity[0]));
   const float accelAngle = RAD2DEG(
       std::atan2(alternate ? cmd.rightmove : -cmd.rightmove, cmd.forwardmove));
   float perAngle =
-      RAD2DEG(std::acos((ps.speed - getFrameAccel(ps, pm)) / speed * scale));
+      RAD2DEG(std::acos((pm->pmext->accel * wishspeed - getFrameAccel(ps, pm)) / speed));
   if (!forwards) {
     perAngle *= -1;
   }

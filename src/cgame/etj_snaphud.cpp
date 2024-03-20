@@ -303,7 +303,41 @@ void Snaphud::PrepareDrawables() {
       const bool isAlt = i % 2;
       isCurrentAlt |= active && isAlt;
 
-      drawableSnaps.push_back(DrawableSnap{bSnap, eSnap, isAlt, active});
+      float snapAngRad = SHORT2RAD(bSnap);
+
+      const float frameAccel = CGaz::getFrameAccel(*ps, pm);
+      const float maxAccel = std::roundf(frameAccel);
+
+      float accelX =
+          std::roundf(frameAccel * static_cast<float>(std::cos(snapAngRad)));
+      float accelY =
+          std::roundf(frameAccel * static_cast<float>(std::sin(snapAngRad)));
+
+      vec4_t color;
+      VectorCopy(colorWhite, color);
+
+      if (std::abs(pm->ps->velocity[0]) > std::abs(pm->ps->velocity[1])) {
+        LerpColor(colorGreen, colorRed, color,
+                  Numeric::clamp((abs(maxAccel) - abs(accelX)) / abs(maxAccel),
+                                 0.0f, 1.0f));
+      } else {
+        LerpColor(colorGreen, colorRed, color,
+                  Numeric::clamp((abs(maxAccel) - abs(accelY)) / abs(maxAccel),
+                                 0.0f, 1.0f));
+      }
+
+        // we want a solid color all the time, no dark tints
+      if (color[0] != 0.0f && color[1] != 0.0f) { // if we have a mix of R & G
+        size_t maxColorIndex = color[0] > color[1] ? 0 : 1;
+        float maxShade = 1.0f; // min value to show per color
+        float coef = maxShade / color[maxColorIndex];
+
+        VectorScale(color, coef, color);
+      }
+
+      color[3] = 1.0f;
+
+      drawableSnaps.push_back(DrawableSnap{bSnap, eSnap, isAlt, active, color[0], color[1], color[2], color[3]});
     }
   }
 }
@@ -335,6 +369,10 @@ void Snaphud::render() const {
                       SHORT2RAD(yaw), y, h, fov, snaphudColors[color]);
       CG_FillAngleYaw(SHORT2RAD(ds.eSnap), SHORT2RAD(ds.eSnap - edgeThickness),
                       SHORT2RAD(yaw), y, h, fov, snaphudColors[color]);
+    } else if (etj_drawSnapHUD.integer == 3) {
+      vec4_t c{ds.red, ds.green, ds.blue, ds.alpha};
+      CG_FillAngleYaw(SHORT2RAD(ds.bSnap), SHORT2RAD(ds.eSnap), SHORT2RAD(yaw),
+                      y, h, fov, c);
     } else {
       CG_FillAngleYaw(SHORT2RAD(ds.bSnap), SHORT2RAD(ds.eSnap), SHORT2RAD(yaw),
                       y, h, fov, snaphudColors[color]);
