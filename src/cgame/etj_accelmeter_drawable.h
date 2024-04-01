@@ -59,6 +59,7 @@ class AccelMeter : public IRenderable {
   pmove_t *pm{};
 
 public:
+  static vec3_t *getAcccel(vec3_t accel);
   AccelMeter();
   ~AccelMeter() override = default;
 

@@ -74,8 +74,9 @@ void Snaphud::InitSnaphud(vec3_t wishvel, int8_t uCmdScale, usercmd_t cmd) {
   }
 
   // set correct yaw based on strafe style/keys pressed
-  const float tempYaw = RAD2SHORT(atan2f(wishvel[1], wishvel[0]));
-  yaw = AngleNormalize65536(lroundf(tempYaw));
+  const float tempYaw = RAD2SHORT(atan2f(-cmd.rightmove, cmd.forwardmove));
+  yaw =
+      AngleNormalize65536(cmd.angles[YAW] + lroundf(tempYaw));
 }
 
 void Snaphud::UpdateSnapState(void) {
@@ -211,10 +212,11 @@ void Snaphud::UpdateMaxSnapZones(float wishspeed, pmove_t *pm) {
   // this needs to be dynamically calculated because
   // ps->speed can be modified by target_scale_velocity
   // default: 57 on ground, 7 in air (352 wishspeed)
-  const int maxSnaphudZonesQ1 = static_cast<int>(
-      std::round(wishspeed / (1000.0f / pm->pmove_msec) * pm->pmext->accel) *
-          2 +
-      1);
+  const int maxSnaphudZonesQ1 = static_cast<int>(std::roundf(snap.a) * 2 + 1);
+
+  // TODO
+  // 11 zones for 60deg slope, 9 zones for ~78 deg slope
+  // need to add clipped gravity component to accel
 
   snap.zones.resize(maxSnaphudZonesQ1);
   snap.xAccel.resize(maxSnaphudZonesQ1);
@@ -251,9 +253,11 @@ bool Snaphud::beforeRender() {
 
   // calculate wishspeed
   vec3_t wishvel;
-  float wishspeed =
-      PmoveUtils::PM_GetWishspeed(wishvel, scale, cmd, pm->pmext->forward,
-                                  pm->pmext->right, pm->pmext->up, *ps, pm);
+  float wishspeed;
+
+    wishspeed = PmoveUtils::PM_GetGroundWalkWishspeed(
+        wishvel, scale, cmd, pm->pmext->forward, pm->pmext->right,
+        pm->pmext->up, ps->viewangles[YAW], pm, etj_CGazTrueness.integer);
 
   // set default wishspeed for drawing if no user input
   if (!cmd.forwardmove && !cmd.rightmove) {

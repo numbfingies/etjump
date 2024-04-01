@@ -96,20 +96,18 @@ void AccelColor::calcAccelColor(pmove_t *pm, vec3_t &accel, vec4_t &outColor) {
 
     if (pm->groundPlane && (pm->pmext->groundTrace.plane.normal[0] ||
                             pm->pmext->groundTrace.plane.normal[1])) {
-      vec3_t optAccel = {optAccelX, optAccelY, gravityAccel};
-      vec3_t altOptAccel = {altOptAccelX, altOptAccelY, gravityAccel};
-      vec3_t normal = {0, 0, 0};
+      float gravityAbsAccel =
+          static_cast<float>(pm->ps->gravity) * pm->pmext->frametime;
 
-      VectorCopy(pm->groundTrace.plane.normal, normal);
+      vec3_t gravityAccel{0.f, 0.f, -gravityAbsAccel};
+      PM_ClipVelocity(gravityAccel, pm->pmext->groundTrace.plane.normal,
+                      gravityAccel, 1);
 
-      PM_ClipVelocity(optAccel, normal, optAccel, OVERCLIP);
-      PM_ClipVelocity(altOptAccel, normal, altOptAccel, OVERCLIP);
+      optAccelX += std::roundf(gravityAccel[0]);
+      altOptAccelX += std::roundf(gravityAccel[0]);
 
-      optAccelX = std::round(optAccel[0]);
-      altOptAccelX = std::round(altOptAccel[0]);
-
-      optAccelY = std::round(optAccel[1]);
-      altOptAccelY = std::round(altOptAccel[1]);
+      optAccelY += std::roundf(gravityAccel[1]);
+      altOptAccelY += std::roundf(gravityAccel[1]);
     }
 
     // find max accel possible between opt and altOpt angles

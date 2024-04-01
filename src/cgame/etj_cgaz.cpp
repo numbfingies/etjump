@@ -41,6 +41,7 @@ namespace ETJump {
   float CGaz::drawSnap{}; // NaN if disabled or not applicable
   float CGaz::drawVel{};
   float CGaz::yaw{};
+  vec3_t CGaz::lastSpeed{};
 
 CGaz::CGaz() {
   // CGaz 1
@@ -86,11 +87,26 @@ void CGaz::UpdateCGaz1(vec3_t wishvel, int8_t uCmdScale, usercmd_t cmd) {
     cmd.forwardmove = uCmdScale;
 
     // recalculate wishvel with defaulted forwardmove
-    PmoveUtils::PM_UpdateWishvel(wishvel, cmd, pm->pmext->forward,
-                                 pm->pmext->right, pm->pmext->up, *ps);
+    PmoveUtils::PM_UpdateGroundWalkWishvel(wishvel, cmd, pm->pmext->forward,
+                                           pm->pmext->right, pm->pmext->up,
+                                           ps->viewangles[YAW]);
   }
 
   yaw = atan2f(wishvel[1], wishvel[0]) - drawVel;
+
+  //yaw = DEG2RAD(pm->ps->viewangles[YAW]) +
+  //      atan2f(-cmd.rightmove, cmd.forwardmove) -
+  //      drawVel;
+
+  //vec3_t accel{};
+
+  //VectorSubtract(pm->pmext->velocity, lastSpeed, accel);
+  //Com_Printf("%f %f speed=%f opt=%f wishdir=%f accel=%f yaw=%f\n", pm->pmext->velocity[0],
+  //           pm->pmext->velocity[1], state.vp, RAD2DEG(drawOpt + drawVel),
+  //           RAD2DEG(atan2f(wishvel[1], wishvel[0])), accel[1], yaw);
+  //Com_Printf("%f %f %f\n", pm->pmext->groundTrace.plane.normal[0],
+  //           pm->pmext->groundTrace.plane.normal[1],
+  //           pm->pmext->groundTrace.plane.normal[2]);
 }
 
 void CGaz::UpdateCGaz2() {
@@ -106,13 +122,35 @@ void CGaz::UpdateDraw(float wishspeed, const playerState_t* ps, pmove_t *pm) {
     wishspeed = static_cast<float>(ps->speed) * ps->sprintSpeedScale;
   }
 
-  const float accel = pm->pmext->accel;
-
   state.gSquared = GetSlickGravity(ps, pm);
+  state.a = std::roundf(PmoveUtils::getFrameAccel(*ps, pm));
+
   state.vSquared = VectorLengthSquared2(pm->pmext->previous_velocity);
   state.vfSquared = VectorLengthSquared2(pm->pmext->velocity);
+
+  //if (pm->pmext->groundPlane && (pm->pmext->groundTrace.plane.normal[0] ||
+  //     pm->pmext->groundTrace.plane.normal[1]) && pm->pmext->groundTrace.surfaceFlags & SURF_SLICK) {
+  //  const float gravityAbsAccel = std::roundf(pm->ps->gravity * pm->pmext->frametime);
+  //  vec3_t gravityAccel{0.f, 0.f, -gravityAbsAccel};
+  //  PM_ClipVelocity(gravityAccel, pm->pmext->groundTrace.plane.normal,
+  //                  gravityAccel, OVERCLIP);
+
+  //  vec3_t predictedVelocity{};
+  //  VectorCopy(pm->ps->velocity, predictedVelocity);
+  //  //VectorAdd(predictedVelocity, gravityAccel, predictedVelocity);
+
+  //  float gravityAccelxy = std::roundf(VectorLength2(gravityAccel));
+
+  //  state.vp = VectorLength2(predictedVelocity);
+  //  state.vpSquared = pow(state.vp, 2);
+  //  //state.a += gravityAccelxy;
+  //} else {
+  //  state.vpSquared = state.vfSquared;
+  //  state.vp = sqrtf(state.vpSquared);
+  //}
+
   state.wishspeed = wishspeed;
-  state.a = accel * state.wishspeed * pm->pmext->frametime;
+
   state.aSquared = powf(state.a, 2);
   // show true ground zones?
   if (!(etj_CGazTrueness.integer &
@@ -126,7 +164,15 @@ void CGaz::UpdateDraw(float wishspeed, const playerState_t* ps, pmove_t *pm) {
   state.vf = sqrtf(state.vfSquared);
 
   drawMin = UpdateDrawMin(&state);
-  drawOpt = UpdateDrawOpt(&state);
+  if (pm->pmext->groundPlane &&
+      (pm->pmext->groundTrace.plane.normal[0] ||
+       pm->pmext->groundTrace.plane.normal[1]) &&
+      pm->pmext->groundTrace.surfaceFlags & SURF_SLICK) {
+    drawOpt = UpdateDrawOptSlope(pm, &state);
+  } else {
+    drawOpt = UpdateDrawOpt(&state);
+  }
+  //drawOpt = UpdateDrawOpt(&state);
   drawMaxCos = UpdateDrawMaxCos(&state);
   drawMax = UpdateDrawMax(&state);
   drawSnap = UpdateDrawSnap(ps, pm);
@@ -177,8 +223,40 @@ float CGaz::UpdateDrawMin(state_t const *state) {
 }
 
 float CGaz::UpdateDrawOpt(state_t const *state) {
-  float const num = state->wishspeed - state->a;
+  float num = state->wishspeed - state->a;
   return num >= state->vf ? 0 : acosf(num / state->vf);
+}
+
+float CGaz::UpdateDrawOptSlope(pmove_t *pm, state_t const *state) {
+  // find min wishspeed which meets condition:
+  // wishspeedMin - dotspeed(velocity, wishdir) = wishspeedMin * frametime
+  // which, simplifies to dotspeed = wishspeedMin * (1 - framtime)
+  //vec3_t flippedNormal{};
+
+  //VectorCopy(pm->pmext->groundTrace.plane.normal, flippedNormal);
+  //flippedNormal[0] *= -1;
+  //flippedNormal[1] *= -1;
+
+  //const float yawMinWishspeed = atan2f(flippedNormal[1], flippedNormal[0]);
+  //const float accelAngle = RAD2DEG(std::atan2(-pm->cmd.rightmove, pm->cmd.forwardmove));
+
+  //vec3_t wishvel, forward, right, up;
+
+  //// show upmove influence?
+  //const float scale =
+  //    etj_CGazTrueness.integer & static_cast<int>(CGazTrueness::CGAZ_JUMPCROUCH)
+  //        ? pm->pmext->scale
+  //        : pm->pmext->scaleAlt;
+
+  //float minWishspeed = PmoveUtils::PM_GetGroundWalkWishspeed(
+  //    wishvel, scale, pm->cmd, forward, right, up, yawMinWishspeed - accelAngle, pm, true);
+  //float wishspeed =
+  //    PmoveUtils::PM_GetWishspeed(wishvel, scale, pm->cmd, pm->pmext->forward,
+  //                                pm->pmext->right, pm->pmext->up, *pm->ps, pm);
+  float num = state->wishspeed - state->a;
+  float ang = num >= state->vf ? 0 : acosf(num / (state->vf));
+
+  return ang;
 }
 
 float CGaz::UpdateDrawMaxCos(state_t const *state) {
@@ -218,7 +296,7 @@ bool CGaz::beforeRender() {
                                                      (BUTTON_WALKING << 8)
                                                  ? CMDSCALE_WALK
                                                  : CMDSCALE_DEFAULT);
-  const usercmd_t cmd = PmoveUtils::getUserCmd(*ps, uCmdScale);
+  usercmd_t cmd = PmoveUtils::getUserCmd(*ps, uCmdScale);
 
   // get correct pmove state
   pm = PmoveUtils::getPmove(cmd);
@@ -230,16 +308,45 @@ bool CGaz::beforeRender() {
     return false;
   }
 
-  // show upmove influence?
-  const float scale =
-      etj_CGazTrueness.integer & static_cast<int>(CGazTrueness::CGAZ_JUMPCROUCH)
-          ? pm->pmext->scale
-          : pm->pmext->scaleAlt;
+  //// show upmove influence?
+  //const float scale =
+  //    etj_CGazTrueness.integer & static_cast<int>(CGazTrueness::CGAZ_JUMPCROUCH)
+  //        ? pm->pmext->scale
+  //        : pm->pmext->scaleAlt;
+
+  float max = abs(cmd.forwardmove);
+  if (abs(cmd.rightmove) > max) {
+    max = abs(cmd.rightmove);
+  }
+  if (abs(cmd.upmove) > max) {
+    max = abs(cmd.upmove);
+  }
+  
+  const float total = sqrtf(cmd.forwardmove * cmd.forwardmove +
+                      cmd.rightmove * cmd.rightmove + cmd.upmove * cmd.upmove);
+
+  const float scale = ps->speed * max / (127.0f * total) * 1.1f;
 
   vec3_t wishvel;
-  float wishspeed =
-      PmoveUtils::PM_GetWishspeed(wishvel, scale, cmd, pm->pmext->forward,
-                                  pm->pmext->right, pm->pmext->up, *ps, pm);
+  float wishspeed;
+
+  //if (pm->pmext->groundPlane &&
+  //    (pm->pmext->groundTrace.plane.normal[0] ||
+  //     pm->pmext->groundTrace.plane.normal[1]) &&
+  //    pm->pmext->groundTrace.surfaceFlags & SURF_SLICK) {
+    wishspeed = PmoveUtils::PM_GetGroundWalkWishspeed(
+        wishvel, scale, cmd, pm->pmext->forward, pm->pmext->right,
+        pm->pmext->up, ps->viewangles[YAW], pm, etj_CGazTrueness.integer);
+  //} else {
+  //  wishspeed =
+  //      PmoveUtils::PM_GetWishspeed(wishvel, scale, cmd, pm->pmext->forward,
+  //                                  pm->pmext->right, pm->pmext->up, *ps, pm);
+
+  //}
+
+  //wishspeed =
+  //    PmoveUtils::PM_GetWishspeed(wishvel, scale, cmd, pm->pmext->forward,
+  //                                pm->pmext->right, pm->pmext->up, *ps, pm);
 
   // set default wishspeed for drawing if no user input
   if (!cmd.forwardmove && !cmd.rightmove) {
@@ -255,6 +362,7 @@ bool CGaz::beforeRender() {
     UpdateCGaz2();
   }
 
+  VectorCopy(pm->pmext->velocity, lastSpeed);
   return true;
 }
 
@@ -287,20 +395,20 @@ void CGaz::render() const {
         drawMax == 0 || drawMax == (float)M_PI || drawMax >= zone3 ? drawMax
                                                                    : zone3;
 
-    // No accel zone
-    CG_FillAngleYaw(-zone1, +zone1, yaw, y, h, fov, CGaz1Colors[0]);
+    //// No accel zone
+    //CG_FillAngleYaw(-zone1, +zone1, yaw, y, h, fov, CGaz1Colors[0]);
 
-    // Min angle
-    CG_FillAngleYaw(+zone1, +zone2, yaw, y, h, fov, CGaz1Colors[1]);
-    CG_FillAngleYaw(-zone2, -zone1, yaw, y, h, fov, CGaz1Colors[1]);
+    //// Min angle
+    //CG_FillAngleYaw(+zone1, +zone2, yaw, y, h, fov, CGaz1Colors[1]);
+    //CG_FillAngleYaw(-zone2, -zone1, yaw, y, h, fov, CGaz1Colors[1]);
 
     // Accel/snap zone
     CG_FillAngleYaw(+zone2, +zone3, yaw, y, h, fov, CGaz1Colors[2]);
     CG_FillAngleYaw(-zone3, -zone2, yaw, y, h, fov, CGaz1Colors[2]);
 
-    // Max angle
-    CG_FillAngleYaw(+zone3, +zone4, yaw, y, h, fov, CGaz1Colors[3]);
-    CG_FillAngleYaw(-zone4, -zone3, yaw, y, h, fov, CGaz1Colors[3]);
+    //// Max angle
+    //CG_FillAngleYaw(+zone3, +zone4, yaw, y, h, fov, CGaz1Colors[3]);
+    //CG_FillAngleYaw(-zone4, -zone3, yaw, y, h, fov, CGaz1Colors[3]);
   }
 
   // Dzikie Weze's 2D-CGaz
@@ -447,9 +555,8 @@ float CGaz::getOptAngle(const playerState_t &ps, pmove_t *pm, bool alternate) {
   const float accelAngle = RAD2DEG(
       std::atan2(alternate ? cmd.rightmove : -cmd.rightmove, cmd.forwardmove));
 
-  const float frameAccel = PmoveUtils::getFrameAccel(ps, pm);
   float perAngle = RAD2DEG(
-      std::acos((pm->pmext->accel * state.wishspeed - frameAccel) / state.vf));
+      std::acos((state.wishspeed - state.a) / state.vf));
 
   if (!forwards) {
     perAngle *= -1;

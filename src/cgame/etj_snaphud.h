@@ -52,6 +52,7 @@ private:
   void InitSnaphud(vec3_t wishvel, int8_t uCmdScale, usercmd_t cmd);
   void UpdateMaxSnapZones(float wishspeed, pmove_t *pm);
   void UpdateSnapState(void);
+  void UpdateSnapStateSlope();
   void PrepareDrawables();
   void startListeners();
 

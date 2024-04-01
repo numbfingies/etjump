@@ -38,10 +38,12 @@ public:
     float gSquared;  // 0 when not on slick
     float vSquared;  // previous_velocity squared
     float vfSquared; // velocity squared
+    float vpSquared;
     float aSquared;  // accel squared
 
     float v;  // previous_velocity
     float vf; // velocity
+    float vp; // predicted_velocity
     float a;  // accel
 
     float wishspeed;
@@ -54,6 +56,7 @@ public:
   static float drawSnap; // NaN if disabled or not applicable
   static float drawVel;
   static float yaw;
+  static vec3_t lastSpeed;
 
   CGaz();
   ~CGaz() override = default;
@@ -73,6 +76,7 @@ private:
   static float GetSlickGravity(const playerState_t *ps, pmove_t *pm);
   static float UpdateDrawMin(state_t const *state);
   static float UpdateDrawOpt(state_t const *state);
+  static float UpdateDrawOptSlope(pmove_t * pm, state_t const *state);
   static float UpdateDrawMaxCos(state_t const *state);
   static float UpdateDrawMax(state_t const *state);
   static float UpdateDrawSnap(const playerState_t *ps, pmove_t *pm);

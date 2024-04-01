@@ -98,12 +98,47 @@ float PmoveUtils::PM_SprintScale(const playerState_t *ps) {
   return scale;
 }
 
+static void PM_Accelerate(vec3_t vel, vec3_t wishdir, float wishspeed,
+                          float accel) {
+  // q2 style
+  int i;
+  float addspeed, accelspeed, currentspeed;
+
+  currentspeed = DotProduct(vel, wishdir);
+  addspeed = wishspeed - currentspeed;
+  if (addspeed <= 0) {
+    return;
+  }
+  accelspeed = accel * pml.frametime * wishspeed;
+  if (accelspeed > addspeed) {
+    accelspeed = addspeed;
+  }
+
+  // Ridah, variable friction for AI's
+  if (pm->ps->groundEntityNum != ENTITYNUM_NONE) {
+    accelspeed *= (1.0 / pm->ps->friction);
+  }
+  if (accelspeed > addspeed) {
+    accelspeed = addspeed;
+  }
+
+  for (i = 0; i < 3; i++) {
+    vel[i] += accelspeed * wishdir[i];
+  }
+}
+
 float PmoveUtils::PM_GetWishspeed(vec3_t wishvel, float scale, usercmd_t cmd,
                                   vec3_t forward, vec3_t right, vec3_t up,
                                   const playerState_t &ps, pmove_t *pm) {
   PM_UpdateWishvel(wishvel, cmd, forward, right, up, ps);
 
-  float wishspeed = scale * VectorLength2(wishvel);
+  //float wishspeed = scale * VectorLength2(wishvel);
+
+  vec3_t wishdir{};
+  VectorCopy(wishvel, wishdir);
+
+  float wishspeed = VectorNormalize(wishdir);
+  wishspeed *= scale;
 
   // if walking, account for prone, crouch and water
   if (pm->pmext->walking) {
@@ -152,6 +187,159 @@ void PmoveUtils::PM_UpdateWishvel(vec3_t wishvel, usercmd_t cmd, vec3_t forward,
   for (uint8_t i = 0; i < 2; ++i) {
     wishvel[i] = cmd.forwardmove * forward[i] + cmd.rightmove * right[i];
   }
+  wishvel[2] = 0;
+}
+
+float PmoveUtils::PM_GetGroundWalkWishspeed(vec3_t wishvel, float scale,
+                                            usercmd_t cmd, vec3_t forward,
+                                            vec3_t right, vec3_t up,
+                                            float yaw,
+                                            pmove_t *pm, bool trueness) {
+  PM_UpdateGroundWalkWishvel(wishvel, cmd, forward, right, up, yaw);
+
+  vec3_t wishdir;
+  VectorCopy(wishvel, wishdir);
+
+  float wishspeed = VectorNormalize(wishdir);
+  wishspeed *= scale;
+
+  // clamp the speed lower if prone
+  if (pm->ps->eFlags & EF_PRONE) {
+    if (wishspeed > pm->ps->speed * pm_proneSpeedScale) {
+      wishspeed = pm->ps->speed * pm_proneSpeedScale;
+    }
+  } else if (pm->ps->pm_flags &
+             PMF_DUCKED) { // clamp the speed lower if ducking
+    /*if ( wishspeed > pm->ps->speed * pm_duckScale ) {
+            wishspeed = pm->ps->speed * pm_duckScale;
+    }*/
+    if (wishspeed > pm->ps->speed * pm->ps->crouchSpeedScale) {
+      wishspeed = pm->ps->speed * pm->ps->crouchSpeedScale;
+    }
+  }
+
+  // clamp the speed lower if wading or walking on the bottom
+  if (pm->waterlevel) {
+    float waterScale;
+
+    waterScale = pm->waterlevel / 3.0;
+    if (pm->watertype == CONTENTS_SLIME) { //----(SA)	slag
+      waterScale = 1.0 - (1.0 - pm_slagSwimScale) * waterScale;
+    } else {
+      waterScale = 1.0 - (1.0 - pm_waterSwimScale) * waterScale;
+    }
+
+    if (wishspeed > pm->ps->speed * waterScale) {
+      wishspeed = pm->ps->speed * waterScale;
+    }
+  }
+
+  return wishspeed;
+}
+//
+//float PmoveUtils::PM_GetPredictedVelocityxy(const float yaw, pmove_t *pm,
+//                                          bool trueness) {
+//  vec3_t wishvel;
+//  vec3_t wishdir;
+//  vec3_t forward, right, up;
+//  float wishspeed;
+//  float scale;
+//  usercmd_t cmd;
+//
+//  cmd = pm->cmd;
+//
+//  if (trueness) {
+//    scale = pm->pmext->scale;
+//
+//    if (pm->cmd.buttons & BUTTON_SPRINT && pm->pmext->sprintTime > 50) {
+//      scale *= pm->ps->sprintSpeedScale;
+//    } else {
+//      scale *= pm->ps->runSpeedScale;
+//    }
+//  } else {
+//    scale =pm->pmext->scaleAlt;
+//    scale *= pm->ps->sprintSpeedScale;
+//  }
+//
+//  PM_UpdateGroundWalkWishvel(wishvel, cmd, forward, right, up, yaw);
+//  VectorCopy(wishvel, wishdir);
+//
+//  wishspeed = VectorNormalize(wishdir);
+//  wishspeed *= scale;
+//
+//  if (trueness) {
+//    // clamp the speed lower if prone
+//    if (pm->ps->eFlags & EF_PRONE) {
+//      if (wishspeed > pm->ps->speed * pm_proneSpeedScale) {
+//        wishspeed = pm->ps->speed * pm_proneSpeedScale;
+//      }
+//    } else if (pm->ps->pm_flags &
+//               PMF_DUCKED) { // clamp the speed lower if ducking
+//      /*if ( wishspeed > pm->ps->speed * pm_duckScale ) {
+//              wishspeed = pm->ps->speed * pm_duckScale;
+//      }*/
+//      if (wishspeed > pm->ps->speed * pm->ps->crouchSpeedScale) {
+//        wishspeed = pm->ps->speed * pm->ps->crouchSpeedScale;
+//      }
+//    }
+//
+//    // clamp the speed lower if wading or walking on the bottom
+//    if (pm->waterlevel) {
+//      float waterScale;
+//
+//      waterScale = pm->waterlevel / 3.0;
+//      if (pm->watertype == CONTENTS_SLIME) { //----(SA)	slag
+//        waterScale = 1.0 - (1.0 - pm_slagSwimScale) * waterScale;
+//      } else {
+//        waterScale = 1.0 - (1.0 - pm_waterSwimScale) * waterScale;
+//      }
+//
+//      if (wishspeed > pm->ps->speed * waterScale) {
+//        wishspeed = pm->ps->speed * waterScale;
+//      }
+//    }
+//  }
+//
+//  vec3_t predictedVelocity;
+//  VectorCopy(pm->ps->velocity, predictedVelocity);
+//
+//  PM_Accelerate(predictedVelocity, wishdir, wishspeed, pm_airaccelerate);
+//
+//  // gravity influence
+//  pm->ps->velocity[2] -= pm->ps->gravity * pml.frametime;
+//
+//  float vel = VectorLength(predictedVelocity);
+//
+//  // slide along the ground plane
+//  PM_ClipVelocity(predictedVelocity, pm->pmext->groundTrace.plane.normal,
+//                  predictedVelocity, OVERCLIP);
+//
+//  // don't decrease velocity when going up or down a slope
+//  VectorNormalize(predictedVelocity);
+//  VectorScale(predictedVelocity, vel, predictedVelocity);
+//
+//  return VectorLength2(predictedVelocity);
+//}
+
+void PmoveUtils::PM_UpdateGroundWalkWishvel(vec3_t wishvel, usercmd_t cmd,
+                                            vec3_t forward,
+                                  vec3_t right, vec3_t up,
+                                  const float yaw) {
+  const vec3_t angles{0.f, yaw, 0.f};
+  AngleVectors(angles, forward, right, up);
+
+  // project the forward and right directions onto the ground plane
+  PM_ClipVelocity(forward, pm->pmext->groundTrace.plane.normal, forward,
+                  OVERCLIP);
+  PM_ClipVelocity(right, pm->pmext->groundTrace.plane.normal, right, OVERCLIP);
+  
+
+  VectorNormalize(forward);
+  VectorNormalize(right);
+
+  for (uint8_t i = 0; i < 3; i++) {
+    wishvel[i] = forward[i] * cmd.forwardmove + right[i] * cmd.rightmove;
+  }
 }
 
 float PmoveUtils::getFrameAccel(const playerState_t &ps, pmove_t *pm) {
@@ -170,6 +358,10 @@ float PmoveUtils::getFrameAccel(const playerState_t &ps, pmove_t *pm) {
   const float wishspeed = PmoveUtils::PM_GetWishspeed(
       wishvel, pm->pmext->scale, cmd, pm->pmext->forward, pm->pmext->right,
       pm->pmext->up, ps, pm);
-  return pm->pmext->accel * wishspeed * pm->pmext->frametime;
+
+  float wishAccel = pm->pmext->accel * wishspeed * pm->pmext->frametime;
+
+  return wishAccel;
 }
+
 } // namespace ETJump
