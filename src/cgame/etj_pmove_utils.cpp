@@ -127,6 +127,64 @@ static void PM_Accelerate(vec3_t vel, vec3_t wishdir, float wishspeed,
   }
 }
 
+float PmoveUtils::PM_CmdScale(pmove_t* pm, usercmd_t *cmd) {
+  int max;
+  float total;
+  float scale;
+
+  max = abs(cmd->forwardmove);
+  if (abs(cmd->rightmove) > max) {
+    max = abs(cmd->rightmove);
+  }
+  if (abs(cmd->upmove) > max) {
+    max = abs(cmd->upmove);
+  }
+  if (!max) {
+    return 0;
+  }
+
+  total = sqrt(cmd->forwardmove * cmd->forwardmove +
+               cmd->rightmove * cmd->rightmove + cmd->upmove * cmd->upmove);
+  scale = (float)pm->ps->speed * max / (127.0 * total);
+
+  if (pm->cmd.buttons & BUTTON_SPRINT && pm->pmext->sprintTime > 50) {
+    scale *= pm->ps->sprintSpeedScale;
+  } else {
+    scale *= pm->ps->runSpeedScale;
+  }
+
+  if (pm->ps->pm_type == PM_NOCLIP) {
+    scale *= 3;
+  }
+
+  // JPW NERVE -- half move speed if heavy weapon is carried
+  // this is the counterstrike way of doing it -- ie you can switch to a
+  // non-heavy weapon and move at full speed.  not completely realistic (well,
+  // sure, you can run faster with the weapon strapped to your back than in
+  // carry position) but more fun to play.  If it doesn't play well this way
+  // we'll bog down the player if the own the weapon at all.
+  //
+  if ((pm->ps->weapon == WP_PANZERFAUST) ||
+      (pm->ps->weapon == WP_MOBILE_MG42) ||
+      (pm->ps->weapon == WP_MOBILE_MG42_SET) || (pm->ps->weapon == WP_MORTAR)) {
+    if (pm->skill[SK_HEAVY_WEAPONS] >= 3) {
+      scale *= 0.75;
+    } else {
+      scale *= 0.5;
+    }
+  }
+
+  if (pm->ps->weapon ==
+      WP_FLAMETHROWER) { // trying some different balance for the FT
+    if (!(pm->skill[SK_HEAVY_WEAPONS] >= 3) ||
+        pm->cmd.buttons & BUTTON_ATTACK) {
+      scale *= 0.7;
+    }
+  }
+
+  return scale;
+}
+
 float PmoveUtils::PM_GetWishspeed(vec3_t wishvel, float scale, usercmd_t cmd,
                                   vec3_t forward, vec3_t right, vec3_t up,
                                   const playerState_t &ps, pmove_t *pm) {
@@ -200,6 +258,7 @@ float PmoveUtils::PM_GetGroundWalkWishspeed(vec3_t wishvel, float scale,
   vec3_t wishdir;
   VectorCopy(wishvel, wishdir);
 
+  wishdir[2] = 0;
   float wishspeed = VectorNormalize(wishdir);
   wishspeed *= scale;
 
@@ -236,90 +295,6 @@ float PmoveUtils::PM_GetGroundWalkWishspeed(vec3_t wishvel, float scale,
 
   return wishspeed;
 }
-//
-//float PmoveUtils::PM_GetPredictedVelocityxy(const float yaw, pmove_t *pm,
-//                                          bool trueness) {
-//  vec3_t wishvel;
-//  vec3_t wishdir;
-//  vec3_t forward, right, up;
-//  float wishspeed;
-//  float scale;
-//  usercmd_t cmd;
-//
-//  cmd = pm->cmd;
-//
-//  if (trueness) {
-//    scale = pm->pmext->scale;
-//
-//    if (pm->cmd.buttons & BUTTON_SPRINT && pm->pmext->sprintTime > 50) {
-//      scale *= pm->ps->sprintSpeedScale;
-//    } else {
-//      scale *= pm->ps->runSpeedScale;
-//    }
-//  } else {
-//    scale =pm->pmext->scaleAlt;
-//    scale *= pm->ps->sprintSpeedScale;
-//  }
-//
-//  PM_UpdateGroundWalkWishvel(wishvel, cmd, forward, right, up, yaw);
-//  VectorCopy(wishvel, wishdir);
-//
-//  wishspeed = VectorNormalize(wishdir);
-//  wishspeed *= scale;
-//
-//  if (trueness) {
-//    // clamp the speed lower if prone
-//    if (pm->ps->eFlags & EF_PRONE) {
-//      if (wishspeed > pm->ps->speed * pm_proneSpeedScale) {
-//        wishspeed = pm->ps->speed * pm_proneSpeedScale;
-//      }
-//    } else if (pm->ps->pm_flags &
-//               PMF_DUCKED) { // clamp the speed lower if ducking
-//      /*if ( wishspeed > pm->ps->speed * pm_duckScale ) {
-//              wishspeed = pm->ps->speed * pm_duckScale;
-//      }*/
-//      if (wishspeed > pm->ps->speed * pm->ps->crouchSpeedScale) {
-//        wishspeed = pm->ps->speed * pm->ps->crouchSpeedScale;
-//      }
-//    }
-//
-//    // clamp the speed lower if wading or walking on the bottom
-//    if (pm->waterlevel) {
-//      float waterScale;
-//
-//      waterScale = pm->waterlevel / 3.0;
-//      if (pm->watertype == CONTENTS_SLIME) { //----(SA)	slag
-//        waterScale = 1.0 - (1.0 - pm_slagSwimScale) * waterScale;
-//      } else {
-//        waterScale = 1.0 - (1.0 - pm_waterSwimScale) * waterScale;
-//      }
-//
-//      if (wishspeed > pm->ps->speed * waterScale) {
-//        wishspeed = pm->ps->speed * waterScale;
-//      }
-//    }
-//  }
-//
-//  vec3_t predictedVelocity;
-//  VectorCopy(pm->ps->velocity, predictedVelocity);
-//
-//  PM_Accelerate(predictedVelocity, wishdir, wishspeed, pm_airaccelerate);
-//
-//  // gravity influence
-//  pm->ps->velocity[2] -= pm->ps->gravity * pml.frametime;
-//
-//  float vel = VectorLength(predictedVelocity);
-//
-//  // slide along the ground plane
-//  PM_ClipVelocity(predictedVelocity, pm->pmext->groundTrace.plane.normal,
-//                  predictedVelocity, OVERCLIP);
-//
-//  // don't decrease velocity when going up or down a slope
-//  VectorNormalize(predictedVelocity);
-//  VectorScale(predictedVelocity, vel, predictedVelocity);
-//
-//  return VectorLength2(predictedVelocity);
-//}
 
 void PmoveUtils::PM_UpdateGroundWalkWishvel(vec3_t wishvel, usercmd_t cmd,
                                             vec3_t forward,
@@ -328,12 +303,14 @@ void PmoveUtils::PM_UpdateGroundWalkWishvel(vec3_t wishvel, usercmd_t cmd,
   const vec3_t angles{0.f, yaw, 0.f};
   AngleVectors(angles, forward, right, up);
 
+  forward[2] = 0;
+  right[2] = 0;
+
   // project the forward and right directions onto the ground plane
   PM_ClipVelocity(forward, pm->pmext->groundTrace.plane.normal, forward,
                   OVERCLIP);
   PM_ClipVelocity(right, pm->pmext->groundTrace.plane.normal, right, OVERCLIP);
   
-
   VectorNormalize(forward);
   VectorNormalize(right);
 

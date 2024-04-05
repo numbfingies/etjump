@@ -29,7 +29,7 @@
 namespace ETJump {
 class PmoveUtils {
 public:
-  static float PM_CmdScale(usercmd_t *cmd);
+  static float PM_CmdScale(pmove_t *pm, usercmd_t *cmd);
   // returns real userCmd for players and a faked
   // one for spectators/demo playback
   static usercmd_t getUserCmd(const playerState_t &ps, int8_t uCmdScale);

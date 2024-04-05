@@ -233,7 +233,7 @@ bool Snaphud::beforeRender() {
       ps->stats[STAT_USERCMD_BUTTONS] & (BUTTON_WALKING << 8)
           ? CMDSCALE_WALK
           : CMDSCALE_DEFAULT;
-  const usercmd_t cmd = PmoveUtils::getUserCmd(*ps, uCmdScale);
+  usercmd_t cmd = PmoveUtils::getUserCmd(*ps, uCmdScale);
 
   // get correct pmove state
   pm = PmoveUtils::getPmove(cmd);
@@ -244,20 +244,22 @@ bool Snaphud::beforeRender() {
   if (pm->pmext->waterlevel > 1 || pm->pmext->ladder) {
     return false;
   }
+  
+  float realScale = PmoveUtils::PM_CmdScale(pm, &cmd);
 
   // show upmove influence?
   float scale = etj_snapHUDTrueness.integer &
                         static_cast<int>(SnapTrueness::SNAP_JUMPCROUCH)
-                    ? pm->pmext->scale
+                    ? realScale
                     : pm->pmext->scaleAlt;
 
   // calculate wishspeed
   vec3_t wishvel;
   float wishspeed;
 
-    wishspeed = PmoveUtils::PM_GetGroundWalkWishspeed(
-        wishvel, scale, cmd, pm->pmext->forward, pm->pmext->right,
-        pm->pmext->up, ps->viewangles[YAW], pm, etj_CGazTrueness.integer);
+  wishspeed = PmoveUtils::PM_GetGroundWalkWishspeed(
+      wishvel, scale, cmd, pm->pmext->forward, pm->pmext->right,
+      pm->pmext->up, ps->viewangles[YAW], pm, etj_CGazTrueness.integer);
 
   // set default wishspeed for drawing if no user input
   if (!cmd.forwardmove && !cmd.rightmove) {
@@ -381,6 +383,12 @@ Snaphud::CurrentSnap Snaphud::getCurrentSnap(const playerState_t &ps,
   static Snaphud s;
   CurrentSnap cs{};
 
+  // show upmove influence?
+  float scale = etj_snapHUDTrueness.integer &
+                        static_cast<int>(SnapTrueness::SNAP_JUMPCROUCH)
+                    ? pm->pmext->scale
+                    : pm->pmext->scaleAlt;
+
   // get player yaw
   float yaw = ps.viewangles[YAW];
 
@@ -404,9 +412,9 @@ Snaphud::CurrentSnap Snaphud::getCurrentSnap(const playerState_t &ps,
 
   // update snapzones even if snaphud is not drawn
   vec3_t wishvel;
-  const float wishspeed = PmoveUtils::PM_GetWishspeed(
-      wishvel, pm->pmext->scale, cmd, pm->pmext->forward, pm->pmext->right,
-      pm->pmext->up, ps, pm);
+  const float wishspeed = PmoveUtils::PM_GetGroundWalkWishspeed(
+      wishvel, scale, cmd, pm->pmext->forward, pm->pmext->right, pm->pmext->up,
+      yaw, pm, etj_CGazTrueness.integer);
   float speed = wishspeed * pm->pmext->frametime;
 
   // clamp the max value to match max scaling of target_scale_velocity
