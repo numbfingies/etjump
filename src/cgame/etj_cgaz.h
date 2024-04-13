@@ -76,9 +76,9 @@ private:
   static float GetSlickGravity(const playerState_t *ps, pmove_t *pm);
   static float UpdateDrawMin(state_t const *state);
   static float UpdateDrawOpt(state_t const *state);
-  static float UpdateDrawOptSlope(pmove_t * pm, state_t const *state);
   static float UpdateDrawMaxCos(state_t const *state);
   static float UpdateDrawMax(state_t const *state);
+  static float UpdateDrawOptSlope(pmove_t *pm, state_t const *state);
   static float UpdateDrawSnap(const playerState_t *ps, pmove_t *pm);
   static void UpdateDraw(float wishspeed, const playerState_t *ps, pmove_t *pm);
   void startListeners();

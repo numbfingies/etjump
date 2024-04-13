@@ -258,7 +258,7 @@ float PmoveUtils::PM_GetGroundWalkWishspeed(vec3_t wishvel, float scale,
   vec3_t wishdir;
   VectorCopy(wishvel, wishdir);
 
-  wishdir[2] = 0;
+  //wishdir[2] = 0;
   float wishspeed = VectorNormalize(wishdir);
   wishspeed *= scale;
 

@@ -73,10 +73,11 @@ void Snaphud::InitSnaphud(vec3_t wishvel, int8_t uCmdScale, usercmd_t cmd) {
                                  pm->pmext->right, pm->pmext->up, *ps);
   }
 
-  // set correct yaw based on strafe style/keys pressed
-  const float tempYaw = RAD2SHORT(atan2f(-cmd.rightmove, cmd.forwardmove));
-  yaw =
-      AngleNormalize65536(cmd.angles[YAW] + lroundf(tempYaw));
+  //// set correct yaw based on strafe style/keys pressed
+  //const float tempYaw = RAD2SHORT(atan2f(-cmd.rightmove, cmd.forwardmove));
+  //yaw =
+  //    AngleNormalize65536(cmd.angles[YAW] + lroundf(tempYaw));
+  yaw = RAD2SHORT(atan2(wishvel[1], wishvel[0]));
 }
 
 void Snaphud::UpdateSnapState(void) {
@@ -275,6 +276,16 @@ bool Snaphud::beforeRender() {
                     : pm_airaccelerate;
 
   float a = accel * wishspeed * pm->pmext->frametime;
+
+  vec3_t gravityAccel{0.f, 0.f, -pm->ps->gravity * pm->pmext->frametime};
+  PM_ClipVelocity(gravityAccel, pm->pmext->groundTrace.plane.normal,
+                  gravityAccel, OVERCLIP);
+
+  float gravityAccelxy = VectorLength2(gravityAccel);
+
+  a += gravityAccelxy;
+
+  //Com_Printf("%f %f\n", a, wishspeed);
 
   // clamp the max value to match max scaling of target_scale_velocity
   // FIXME: magic number bad
